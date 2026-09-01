@@ -1,0 +1,121 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "jsPlugins": [
+    "eslint-plugin-boundaries"
+  ],
+  "plugins": [
+    "import"
+  ],
+  "settings": {
+    "import/resolver": {
+      "typescript": {
+        "project": "apps/web/tsconfig.app.json",
+        "noWarnOnMultipleProjects": true
+      }
+    },
+    "boundaries/elements": [
+      {
+        "type": "module",
+        "pattern": "apps/web/src/modules/*",
+        "capture": [
+          "moduleName"
+        ]
+      },
+      {
+        "type": "ui",
+        "pattern": "apps/web/src/components/**"
+      },
+      {
+        "type": "shared",
+        "pattern": "apps/web/src/lib/**"
+      },
+      {
+        "type": "app",
+        "pattern": "apps/web/src/**"
+      }
+    ],
+    "boundaries/include": [
+      "apps/web/src/**/*.ts",
+      "apps/web/src/**/*.tsx"
+    ]
+  },
+  "rules": {
+    "boundaries/no-unknown-files": "error",
+    "boundaries/no-unknown-dependencies": "error",
+    "boundaries/dependencies": [
+      "error",
+      {
+        "default": "disallow",
+        "policies": [
+          {
+            "from": {
+              "element": {
+                "type": "module"
+              }
+            },
+            "allow": {
+              "to": {
+                "element": {
+                  "type": "module",
+                  "captured": {
+                    "moduleName": "{{from.moduleName}}"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "allow": {
+              "to": {
+                "element": {
+                  "type": "module",
+                  "fileInternalPath": "index.ts"
+                }
+              }
+            }
+          },
+          {
+            "allow": {
+              "to": {
+                "element": {
+                  "types": {
+                    "anyOf": [
+                      "shared",
+                      "ui"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "allow": {
+              "to": {
+                "module": {
+                  "origin": [
+                    "external",
+                    "core"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "from": {
+              "element": {
+                "type": "app"
+              }
+            },
+            "allow": {
+              "to": {
+                "element": {
+                  "type": "app"
+                }
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

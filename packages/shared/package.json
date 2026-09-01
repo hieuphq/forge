@@ -1,0 +1,15 @@
+{
+  "name": "@yourorg/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/errors/index.ts",
+  "types": "./src/errors/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.9.0"
+  }
+}

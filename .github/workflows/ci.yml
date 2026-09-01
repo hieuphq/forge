@@ -1,0 +1,257 @@
+name: CI
+
+# TASK-020 (SPEC-005): scaffold this template via BOTH documented entry
+# paths (README.md "Getting started") into temp dirs, then run
+# install -> typecheck -> lint -> test -> build on each, so a regression in
+# either scaffold path fails CI, not just a regression in the checked-in
+# source tree itself.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A stale queued run for the same ref is superseded by a newer push.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------
+  # Secrets scan
+  # ---------------------------------------------------------------------
+  # This repo is eventually public, so scan every push/PR for committed
+  # secrets. We use a lightweight grep-based scan rather than an external
+  # Action (gitleaks/gitleaks-action) to avoid taking on a third-party
+  # Action dependency for a template whose whole point is being a clean,
+  # minimal starting point — the tradeoff is fewer built-in secret-shape
+  # rules than gitleaks ships, so this intentionally stays narrow (known
+  # cloud-provider key prefixes, PEM private key headers, and an
+  # assignment-shaped `secret|token|password|api_key = "<long-value>"`
+  # heuristic) rather than trying to be a general entropy scanner.
+  # Swap this step for gitleaks/gitleaks-action any time the false-negative
+  # risk of the grep heuristic stops being acceptable.
+  secrets-scan:
+    name: Secrets scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history, so the scan covers past commits too
+
+      - name: Scan working tree for known secret shapes
+        run: |
+          set -euo pipefail
+          PATTERN='AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20,}|gho_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|BEGIN (RSA|EC|OPENSSH|PGP) PRIVATE KEY'
+          if grep -rnEI --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=dist "$PATTERN" .; then
+            echo "::error::Potential secret matched a known key/token shape above."
+            exit 1
+          fi
+          echo "No known secret shapes found in the working tree."
+
+      - name: Scan working tree for hardcoded assignment-shaped secrets
+        run: |
+          set -euo pipefail
+          # secret/token/password/api_key = "<16+ char literal>" — a real
+          # generated value, not the .env.example placeholder or a variable
+          # name/type declaration.
+          ASSIGN='(secret|token|password|api[_-]?key)\s*[:=]\s*["'"'"'][A-Za-z0-9+/_=-]{16,}["'"'"']'
+          if grep -rnEI --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=dist \
+              --exclude='*.lock' "$ASSIGN" . \
+              | grep -v 'change-me-in-setup'; then
+            echo "::error::Potential hardcoded secret literal matched above."
+            exit 1
+          fi
+          echo "No hardcoded secret-shaped literals found."
+
+      - name: Scan full git history for known secret shapes
+        run: |
+          set -euo pipefail
+          PATTERN='AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20,}|gho_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|BEGIN (RSA|EC|OPENSSH|PGP) PRIVATE KEY'
+          if git log --all -p | grep -nEI "$PATTERN"; then
+            echo "::error::Potential secret matched a known key/token shape in git history."
+            exit 1
+          fi
+          echo "No known secret shapes found in git history."
+
+  # ---------------------------------------------------------------------
+  # Path B — local-template scaffold (fully testable today)
+  # ---------------------------------------------------------------------
+  # README.md "Path B — owner's machine (local template)" symlinks this repo
+  # into ~/.bun-create/ so `bun create forge myapp` reaches `bun run setup`
+  # through the local lifecycle or its guarded root-postinstall fallback. CI
+  # uses a fresh copied tree and invokes that same setup implementation
+  # directly before running the full verification contract.
+  path-b-local-scaffold:
+    name: Path B — local scaffold
+    runs-on: ubuntu-latest
+
+    services:
+      # Native GitHub Actions service container — this is CI's own Postgres,
+      # configured directly in the workflow, not a reuse of
+      # docker-compose.yml (that file's networking, port 5433, and env-file
+      # wiring are for local dev only and don't translate 1:1 to GH Actions
+      # service containers).
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: forge
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d forge"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # Prisma generation relies on Node being available alongside Bun in CI.
+      # Install it explicitly rather than relying on runner image internals.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Scaffold into a fresh directory (simulates the local-template path)
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/scaffold-path-b
+          rsync -a \
+            --exclude node_modules \
+            --exclude .git \
+            --exclude dist \
+            --exclude .env \
+            "$GITHUB_WORKSPACE/" /tmp/scaffold-path-b/myapp/
+          echo "SCAFFOLD_DIR=/tmp/scaffold-path-b/myapp" >> "$GITHUB_ENV"
+
+      - name: bun run setup (what bun-create.postinstall fires automatically)
+        working-directory: /tmp/scaffold-path-b/myapp
+        run: bun run setup
+
+      - name: install
+        working-directory: /tmp/scaffold-path-b/myapp
+        run: bun install
+
+      - name: Verify scaffold
+        working-directory: /tmp/scaffold-path-b/myapp
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/forge
+        run: bash scripts/verify.sh
+
+  # ---------------------------------------------------------------------
+  # Path A — portable GitHub scaffold
+  # ---------------------------------------------------------------------
+  # `${{ github.repository }}` resolves to `hieuphq/forge`, so CI scaffolds
+  # the exact commit that triggered this workflow and requires the complete
+  # generated-project verification contract to pass.
+  path-a-github-scaffold:
+    name: Path A — GitHub scaffold
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: forge
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d forge"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: bun create portable scaffold
+        id: scaffold
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/scaffold-path-a
+          bun create "${{ github.repository }}" /tmp/scaffold-path-a/myapp
+          echo "scaffolded=true" >> "$GITHUB_OUTPUT"
+
+      - name: bun run setup (portable path contract; safe if already run)
+        if: steps.scaffold.outputs.scaffolded == 'true'
+        working-directory: /tmp/scaffold-path-a/myapp
+        run: bun run setup
+
+      - name: install
+        if: steps.scaffold.outputs.scaffolded == 'true'
+        working-directory: /tmp/scaffold-path-a/myapp
+        run: bun install
+
+      - name: Verify scaffold
+        if: steps.scaffold.outputs.scaffolded == 'true'
+        working-directory: /tmp/scaffold-path-a/myapp
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/forge
+        run: bash scripts/verify.sh
+
+      # "Materially different trees" check (spec language): rather than a
+      # generic tree diff (impractical/low-value while path A can't even
+      # run), compare path A's scaffold output against a fresh path B
+      # scaffold produced the same way, since both paths funnel through the
+      # SAME `scripts/setup.ts` personalisation step — the only source of
+      # a *structural* divergence would be the scaffolding mechanism itself
+      # (e.g. `bun create`'s GitHub download/extract/git-init vs a plain
+      # directory copy), not application logic. This only runs once path A
+      # actually produces output.
+      - name: Scaffold path B for comparison
+        if: steps.scaffold.outputs.scaffolded == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/scaffold-path-a-compare-b
+          rsync -a \
+            --exclude node_modules --exclude .git --exclude dist --exclude .env \
+            "$GITHUB_WORKSPACE/" /tmp/scaffold-path-a-compare-b/myapp/
+          (cd /tmp/scaffold-path-a-compare-b/myapp && bun run setup)
+
+      - name: Diff path A vs path B source trees
+        if: steps.scaffold.outputs.scaffolded == 'true'
+        run: |
+          set -euo pipefail
+          diff -rq \
+            -x node_modules -x .git -x dist -x .env -x bun.lock \
+            /tmp/scaffold-path-a/myapp /tmp/scaffold-path-a-compare-b/myapp \
+            && echo "Path A and Path B produced identical source trees." \
+            || { echo "::error::Path A and Path B scaffolds diverged — see diff above."; exit 1; }
+
+  # ---------------------------------------------------------------------
+  # Overall gate
+  # ---------------------------------------------------------------------
+  # Both scaffold paths and the secrets scan are required. This aggregate job
+  # is the status check to protect on `main`.
+  ci:
+    name: CI required checks
+    runs-on: ubuntu-latest
+    needs: [secrets-scan, path-b-local-scaffold, path-a-github-scaffold]
+    if: always()
+    steps:
+      - name: Fail if any required job failed
+        run: |
+          if [ "${{ needs.secrets-scan.result }}" != "success" ] || \
+             [ "${{ needs.path-b-local-scaffold.result }}" != "success" ] || \
+             [ "${{ needs.path-a-github-scaffold.result }}" != "success" ]; then
+            echo "::error::One or more required CI jobs failed."
+            exit 1
+          fi
+          echo "All required CI jobs passed."

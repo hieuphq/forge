@@ -1,0 +1,30 @@
+{
+  "name": "forge",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "lint": "oxlint",
+    "typecheck": "bun run --workspaces --if-present typecheck",
+    "postinstall": "bun run scripts/postinstall.ts",
+    "setup": "bun run scripts/setup.ts",
+    "check:agents-md": "bun run scripts/check-agents-md.ts",
+    "db:generate": "bun run --filter '@yourorg/api' db:generate",
+    "db:migrate": "bun run --filter '@yourorg/api' db:migrate"
+  },
+  "bun-create": {
+    "postinstall": "bun run setup"
+  },
+  "catalog": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.9.0"
+  },
+  "devDependencies": {
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-boundaries": "^7.2.0",
+    "oxlint": "^1.80.0"
+  }
+}

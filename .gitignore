@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# OS junk
+.DS_Store
+
+# Environment files — everything except the checked-in example.
+# .env.example carries placeholder values and documents the required vars
+# for docker-compose (TASK-004) and the API's env.ts (TASK-005).
+.env*
+!.env.example
+
+# bun.lock is intentionally tracked (deterministic installs); do not add it here.
