@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
-// `@/env`'s parsed `env` object lives at the app root (`src/env.ts`, an
-// "app"-type boundary element per `.oxlintrc.json`), and a "module"-type
-// element may not depend on "app". `main.tsx` still imports `@/env` first
-// so a missing/invalid `VITE_API_URL` throws at boot either way — this
-// reads the same already-validated Vite env var directly, without
-// crossing the boundary.
-const API_URL = import.meta.env.VITE_API_URL as string;
+import { apiBaseUrl } from "@/lib/runtime-config";
+
 
 export interface ExampleItem {
   id: string;
@@ -44,7 +39,7 @@ export async function createExampleItem(input: {
   title: string;
   dueDate: string;
 }): Promise<ExampleItem> {
-  const res = await fetch(`${API_URL}/example-items`, {
+  const res = await fetch(`${apiBaseUrl}/example-items`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -81,7 +76,7 @@ export function useExampleItems() {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/example-items`);
+      const res = await fetch(`${apiBaseUrl}/example-items`);
       if (!res.ok) {
         throw new Error(`Failed to load example items (status ${res.status})`);
       }

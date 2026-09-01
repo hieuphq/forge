@@ -1,6 +1,6 @@
-// Import env first, before anything else, so a missing/invalid VITE_*
-// var throws at app boot (named in the error) rather than surfacing much
-// later at the first fetch call.
+// Import env first, before anything else, so malformed optional VITE_*
+// local-dev fallbacks fail at app boot. Production API config is loaded
+// from /config.js before this module script runs.
 import "@/env";
 
 import { StrictMode } from "react";

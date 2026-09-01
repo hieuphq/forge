@@ -1,4 +1,4 @@
-import { env } from "@/env";
+import { apiBaseUrl } from "@/lib/runtime-config";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/theme-provider";
 import { ExampleItemForm } from "@/modules/example";
@@ -13,7 +13,7 @@ export function App() {
           @yourorg/web
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          API URL: {env.VITE_API_URL}
+          API URL: {apiBaseUrl}
         </p>
         <Button
           type="button"

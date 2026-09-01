@@ -1,3 +1,4 @@
+-- CreateTable
 CREATE TABLE "example_items" (
     "id" UUID NOT NULL,
     "title" TEXT NOT NULL,

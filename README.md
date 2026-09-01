@@ -55,6 +55,29 @@ path is one command because dependency installation invokes the guarded
 fallback above. Both paths converge on `scripts/setup.ts`; the fallback is only
 a dispatch guard, not a second personalization implementation.
 
+## Docker images and runtime config
+
+The template includes Dockerfiles for both shipped apps:
+
+- `apps/api/Dockerfile` uses a full Bun build stage and a slim Bun runtime stage.
+- `apps/web/Dockerfile` builds the Vite bundle and serves it from Nginx.
+
+The web image is immutable across environments. It loads `/config.js` before the
+Vite bundle, and the container entrypoint writes the public browser config from
+runtime env:
+
+```sh
+API_URL=https://api.example.com
+```
+
+If `API_URL` is unset, the web container defaults to `http://localhost:3000`.
+`VITE_API_URL` is only an optional local Vite dev fallback and is not required
+for Docker image builds.
+
+For k3s, provide `API_URL` from a ConfigMap on the web Deployment. It is public
+browser config, not a Secret. Use Secrets only for server-side values such as
+database passwords, JWT secrets, and S3/object-storage keys.
+
 ## Next steps
 
 Once scaffolded and set up, see `AGENTS.md` in the generated project for repo

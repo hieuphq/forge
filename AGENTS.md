@@ -37,13 +37,17 @@ bun run lint
 bun test
 ```
 
-`docker compose up -d` starts Postgres only, on host port 5433; run the Prisma
-migration commands above before tests or API startup. Replace
-`@yourorg` with your personalised scope once `bun run setup` has run. There
-is no root `test` script — Bun's test runner needs none; `bun test` from
-the repo root recursively discovers every `*.test.ts` across every
-workspace. Run it scoped to one package instead if you only want that
-package's suite, e.g. `cd apps/api && bun test`.
+`docker compose up -d` starts Postgres, API, and web. Postgres is published on
+host port 5433, API on 3000, and web on 8080. Run the Prisma migration commands
+above before tests or direct API startup. Replace `@yourorg` with your
+personalised scope once `bun run setup` has run. There is no root `test` script
+— Bun's test runner needs none; `bun test` from the repo root recursively
+discovers every `*.test.ts` across every workspace. Run it scoped to one package
+instead if you only want that package's suite, e.g. `cd apps/api && bun test`.
+
+The web Docker container writes `/config.js` at startup from runtime `API_URL`
+(default `http://localhost:3000`). For k3s, set `API_URL` from a ConfigMap; it is
+public browser config, not a Secret.
 
 ## 4. Module boundaries
 
@@ -91,7 +95,7 @@ demo. Details: `apps/api/src/modules/auth/README.md`.
   be deleted with its migration or replaced by real domain modules.
 - `apps/mobile-lynx` is experimental and unrelated to the Expo app; delete
   it if unused.
-- `docker-compose.yml` only runs Postgres — no Redis, no queue, no other
+- `docker-compose.yml` runs Postgres, API, and web — no Redis, no queue, no other
   service is wired yet.
 - CSRF relies on `SameSite=Lax` + a CORS allowlist, not a dedicated
   CSRF-token scheme (see the auth README's "CSRF stance" section).
