@@ -10,12 +10,16 @@ JWT_SECRET ?= dev-secret-change-me
 CORS_ALLOWED_ORIGINS ?= http://localhost:5173,http://localhost:8080
 API_URL ?= http://localhost:3000
 
-.PHONY: start stop seed migrate generate typecheck lint test verify build-images push-images docker-login k3s-render k3s-apply k3s-migrate k3s-delete
+.PHONY: start stop wait-db seed migrate generate typecheck lint test verify build-images push-images docker-login k3s-render k3s-apply k3s-migrate k3s-delete
 
 start:
 	docker compose up -d postgres
+	$(MAKE) wait-db
 	$(MAKE) migrate
 	docker compose up -d --build api web
+
+wait-db:
+	docker compose exec -T postgres sh -c 'until pg_isready -U "$${POSTGRES_USER:-postgres}" -d "$${POSTGRES_DB:-forge}"; do sleep 1; done'
 
 stop:
 	docker compose down
