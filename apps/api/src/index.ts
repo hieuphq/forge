@@ -11,8 +11,9 @@ import {
 } from "./middleware/security";
 import { traceIdMiddleware } from "./middleware/trace-id";
 import { onError } from "./error/on-error";
-import { exampleItemsApp } from "./modules/example/example-items.route";
 import { authApp } from "./modules/auth/auth.route";
+import { projectsApp } from "./modules/projects/projects.route";
+import { eventsApp } from "./modules/events/events";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -71,8 +72,9 @@ app.get("/health", (c) => {
   return c.json({ status: "ok" });
 });
 
-app.route("/", exampleItemsApp);
 app.route("/", authApp);
+app.route("/", projectsApp);
+app.route("/", eventsApp);
 
 export default {
   fetch: app.fetch,

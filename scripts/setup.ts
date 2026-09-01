@@ -233,6 +233,53 @@ if (existsSync(composePath)) {
   }
 }
 
+// --- 4c. Deployment scaffolds ---
+//
+// The template ships optional Docker/k3s helpers. Keep them readable in the
+// template checkout (forge/yourorg placeholders), then personalise project-local
+// defaults after scaffolding so generated manifests reference the app name.
+
+function rewriteIfExists(relPath: string, replacements: Array<[string, string]>): boolean {
+  const filePath = path.join(ROOT, relPath);
+  if (!existsSync(filePath)) return false;
+  const content = readFileSync(filePath, "utf8");
+  let rewritten = content;
+  for (const [from, to] of replacements) rewritten = rewritten.split(from).join(to);
+  if (rewritten === content) return false;
+  writeFileSync(filePath, rewritten);
+  return true;
+}
+
+const deploymentReplacements: Array<[string, string]> = [
+  ["yourorg/forge", `yourorg/${projectName}`],
+  ["forge.example.com", `${projectName}.example.com`],
+  ["api.forge.example.com", `api.${projectName}.example.com`],
+  ["forge", projectName],
+];
+
+const deploymentFiles = [
+  "deploy/k3s/namespace.yaml",
+  "deploy/k3s/configmap.yaml",
+  "deploy/k3s/secret.example.yaml",
+  "deploy/k3s/postgres.yaml",
+  "deploy/k3s/api.yaml",
+  "deploy/k3s/web.yaml",
+  "deploy/k3s/migrate-job.yaml",
+  "deploy/k3s/ingress.yaml",
+  "deploy/k3s/kustomization.yaml",
+  "deploy/k3s/README.md",
+];
+
+let rewrittenDeployFiles = 0;
+for (const relPath of deploymentFiles) {
+  if (rewriteIfExists(relPath, deploymentReplacements)) rewrittenDeployFiles += 1;
+}
+if (rewrittenDeployFiles > 0) {
+  console.log(`[setup] personalised ${rewrittenDeployFiles} deployment helper file(s)`);
+} else {
+  console.log("[setup] deployment helpers already up to date");
+}
+
 // --- 5. Replace the template README with a project-specific guide ---
 
 const readmePath = path.join(ROOT, "README.md");
@@ -320,17 +367,19 @@ bun run --workspaces --if-present build
 
 ## Known limitations
 
-- Authentication uses an in-memory user store; users disappear on API restart.
+- Authentication uses persistent Prisma users with role-based access.
 - There is no refresh token; logout deletes the cookie but cannot revoke an
   already-issued JWT.
-- \`apps/api/src/modules/example\` is demo CRUD intended to be replaced with
-  your domain code.
+- \`apps/api/src/modules/projects\` is a demo project/expense variance board intended
+  to be replaced or adapted to your domain code.
 - \`apps/mobile-lynx\` is experimental and independent from the Expo app.
 - Docker Compose provisions PostgreSQL, API, and web for local container checks.
+- \`deploy/k3s/\` is a minimal Kubernetes scaffold; review images, hosts, storage,
+  secrets, and ingress before production use.
 - \`_docs/RED-MONITORING.md\` is a proposal, not an implemented monitoring stack.
 
-Before production use, replace the auth store and review the security notes in
-\`apps/api/src/modules/auth/README.md\`.
+Before production use, review the security notes in
+\`apps/api/src/modules/auth/README.md\`, configure production secrets, and replace demo domain code as needed.
 
 ## Development guidance
 

@@ -1,54 +1,17 @@
-/**
- * In-memory user store (TASK-012b).
- *
- * No real database is wired up yet (see the project constraints for this
- * task) — this is a module-scoped `Map` keyed by lowercased email, good
- * enough to prove the auth seam (register -> login -> protected route)
- * works end to end. It is reset whenever the process restarts and is NOT
- * a substitute for a real persistence layer; a later task swaps this out
- * for Postgres without changing the shape callers use here.
- *
- * Passwords are hashed with `Bun.password.hash` (argon2id, Bun's native
- * default) before ever touching the map — the plaintext password is never
- * stored, logged, or retained past the hashing call.
- */
+import { Prisma, type User, type UserRole } from "@prisma/client";
+import { AppError } from "../../error/app-error";
+import { prisma } from "../../db/prisma";
 
-export interface StoredUser {
-  /** Lowercased email, also the map key. */
-  email: string;
-  /** argon2id hash — NEVER the plaintext password. */
-  passwordHash: string;
-}
+export type PublicUser = Pick<User, "id" | "email" | "username" | "name" | "role" | "createdAt" | "updatedAt">;
+export type StoredUser = PublicUser & { passwordHash: string };
 
-const users = new Map<string, StoredUser>();
-
-function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
-}
-
-/**
- * Register (or overwrite) a user. Hashes the password before storing it;
- * the plaintext `password` argument is never written to `users`, logged,
- * or returned.
- */
-export async function registerUser(email: string, password: string): Promise<StoredUser> {
-  const normalizedEmail = normalizeEmail(email);
-  const passwordHash = await Bun.password.hash(password, { algorithm: "argon2id" });
-
-  const user: StoredUser = { email: normalizedEmail, passwordHash };
-  users.set(normalizedEmail, user);
-  return user;
-}
-
-/** Look up a user by email (case-insensitive). Returns `undefined` if none exists. */
-export function findUserByEmail(email: string): StoredUser | undefined {
-  return users.get(normalizeEmail(email));
-}
-
-/**
- * Test-only escape hatch: clears the store so tests don't leak users into
- * each other. Not used by any production route.
- */
-export function __resetUserStoreForTests(): void {
-  users.clear();
-}
+function normalize(value: string): string { return value.trim().toLowerCase(); }
+function conflictError(): AppError { return new AppError("common/VALIDATION_FAILED", "User email or username already exists", { status: 409, details: { fields: { email: ["email or username already exists"] } } }); }
+export function publicUser(user: User): PublicUser { const { passwordHash: _passwordHash, ...publicUser } = user; return publicUser; }
+export async function registerUser(email: string, password: string, options?: { username?: string; name?: string; role?: UserRole }): Promise<StoredUser> { const normalizedEmail = normalize(email); const username = normalize(options?.username ?? normalizedEmail.split("@")[0] ?? normalizedEmail); const passwordHash = await Bun.password.hash(password, { algorithm: "argon2id" }); try { return await prisma.user.create({ data: { email: normalizedEmail, username, name: options?.name, role: options?.role ?? "worker", passwordHash } }); } catch (err) { if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") throw conflictError(); throw err; } }
+export async function findUserByEmail(email: string): Promise<StoredUser | undefined> { return (await prisma.user.findUnique({ where: { email: normalize(email) } })) ?? undefined; }
+export async function findUserByUsernameOrEmail(identifier: string): Promise<StoredUser | undefined> { const normalized = normalize(identifier); return (await prisma.user.findFirst({ where: { OR: [{ email: normalized }, { username: normalized }] } })) ?? undefined; }
+export async function createUser(input: { email: string; username: string; password: string; name?: string; role: UserRole }): Promise<PublicUser> { return publicUser(await registerUser(input.email, input.password, { username: input.username, name: input.name, role: input.role })); }
+export async function updateUser(id: string, input: { email?: string; username?: string; name?: string | null; role?: UserRole }): Promise<PublicUser> { try { return publicUser(await prisma.user.update({ where: { id }, data: { email: input.email === undefined ? undefined : normalize(input.email), username: input.username === undefined ? undefined : normalize(input.username), name: input.name, role: input.role } })); } catch (err) { if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") throw conflictError(); if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") throw new AppError("common/NOT_FOUND", "User not found", { status: 404 }); throw err; } }
+export async function resetUserPassword(id: string, password: string): Promise<PublicUser> { const passwordHash = await Bun.password.hash(password, { algorithm: "argon2id" }); try { return publicUser(await prisma.user.update({ where: { id }, data: { passwordHash } })); } catch (err) { if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") throw new AppError("common/NOT_FOUND", "User not found", { status: 404 }); throw err; } }
+export async function __resetUserStoreForTests(): Promise<void> { await prisma.attachment.deleteMany(); await prisma.expenseItem.deleteMany(); await prisma.expense.deleteMany(); await prisma.project.deleteMany(); await prisma.user.deleteMany(); }

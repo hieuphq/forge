@@ -6,7 +6,8 @@
     "dev": "bun run --watch src/index.ts",
     "typecheck": "tsc --noEmit -p .",
     "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate deploy"
+    "db:migrate": "prisma migrate deploy",
+    "seed": "bun prisma/seed.ts"
   },
   "dependencies": {
     "@hono/zod-openapi": "^0.19.10",

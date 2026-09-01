@@ -12,8 +12,8 @@ ship (API, web), two mobile targets, and two shared libraries:
 
 Scaffold a new project from this template, then personalise it with
 `bun run setup` (rewrites the `@yourorg/*` package scope, project name, and
-generates real local secrets). The example API slice persists through Prisma;
-run `docker compose up -d && bun run db:migrate` before using it.
+generates real local secrets). The API includes a Prisma-backed project/expense variance-board demo;
+run `docker compose up -d postgres && bun run db:migrate && bun run db:seed` before using it.
 
 ## Getting started
 
@@ -54,6 +54,16 @@ scaffolding does not provide the local-template lifecycle guarantee. The local
 path is one command because dependency installation invokes the guarded
 fallback above. Both paths converge on `scripts/setup.ts`; the fallback is only
 a dispatch guard, not a second personalization implementation.
+
+## Demo app
+
+New projects include a small vertical slice: persistent users/roles, project
+estimates, expenses with server-calculated totals, attachment metadata, and SSE
+freshness events. Treat it as a working example to replace or adapt to your
+actual domain.
+
+Seed users are `owner@example.test`, `pm@example.test`, and
+`worker@example.test`; default seed password is `password123`.
 
 ## Docker images and runtime config
 

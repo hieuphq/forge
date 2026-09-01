@@ -76,7 +76,7 @@ Allowed bounded attributes:
 | `http.request.method` | Known canonical method; collapse unknown methods to `_OTHER` |
 | `url.scheme` | Immediate request URL scheme; do not trust forwarded headers |
 | `http.response.status_code` | Final numeric response status |
-| `http.route` | Matched route template such as `/example-items`; omit for unmatched/wildcard routes |
+| `http.route` | Matched route template such as `/projects/{id}`; omit for unmatched/wildcard routes |
 | `error.type` | Predictable low-cardinality value for 5xx only, initially the status string |
 
 Never attach:

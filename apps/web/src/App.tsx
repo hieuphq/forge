@@ -1,30 +1,36 @@
-import { apiBaseUrl } from "@/lib/runtime-config";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/theme-provider";
-import { ExampleItemForm } from "@/modules/example";
+import { api, type Expense, type Project, type Role } from "@/lib/api";
+
+type Session = { email: string; role: Role };
+type ExpenseFormState = { vendor: string; category: "material" | "labor" | "equipment" | "other"; entryDate: string; note: string; tax: string; fee: string; items: { description: string; quantity: string; unitPrice: string }[]; files: { filename: string; contentType: string; sizeBytes: string }[] };
+const emptyExpenseForm: ExpenseFormState = { vendor: "", category: "material", entryDate: new Date().toISOString().slice(0, 10), note: "", tax: "0", fee: "0", items: [{ description: "", quantity: "1", unitPrice: "0" }], files: [] };
+function money(value: number) { return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(value); }
+function pct(value: number) { return `${value.toFixed(1)}%`; }
+function formPayload(form: ExpenseFormState, updatedAt?: string) { return { vendor: form.vendor, category: form.category, entryDate: form.entryDate, note: form.note || undefined, tax: Number(form.tax || 0), fee: Number(form.fee || 0), items: form.items.map((item) => ({ description: item.description, quantity: Number(item.quantity || 0), unitPrice: Number(item.unitPrice || 0) })), ...(updatedAt ? { updatedAt } : {}) }; }
 
 export function App() {
   const { resolvedTheme, toggleTheme } = useTheme();
-
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-10 bg-background py-10">
-      <div className="text-center">
-        <h1 className="font-display text-3xl font-semibold text-brand">
-          @yourorg/web
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          API URL: {apiBaseUrl}
-        </p>
-        <Button
-          type="button"
-          className="mt-4"
-          data-testid="theme-toggle"
-          onClick={toggleTheme}
-        >
-          Switch to {resolvedTheme === "dark" ? "light" : "dark"} mode
-        </Button>
-      </div>
-      <ExampleItemForm />
-    </main>
-  );
+  const [session, setSession] = useState<Session | null>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<{ project: Project; expenses: Expense[] } | null>(null);
+  const [form, setForm] = useState<ExpenseFormState>(emptyExpenseForm);
+  const [editing, setEditing] = useState<Expense | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const canWriteExpense = session?.role === "owner" || session?.role === "pm";
+  const previewTotal = useMemo(() => form.items.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.unitPrice || 0), 0) + Number(form.tax || 0) + Number(form.fee || 0), [form]);
+  async function loadProjects() { const data = await api.projects(); setProjects(data.projects); }
+  async function loadDetail(id: string) { const data = await api.project(id); setDetail(data); }
+  useEffect(() => { void api.me().then(setSession).then(loadProjects).catch(() => undefined); }, []);
+  useEffect(() => { if (!session) return; const events = new EventSource(`${api.baseUrl}/events`, { withCredentials: true }); events.addEventListener("dirty", () => { void loadProjects(); if (selectedProjectId) void loadDetail(selectedProjectId); }); return () => events.close(); }, [session, selectedProjectId]);
+  async function doLogin() { setError(null); try { await api.login(email, password); const me = await api.me(); setSession(me); await loadProjects(); } catch (err) { setError(err instanceof Error ? err.message : "Login failed"); } }
+  async function openProject(id: string) { setSelectedProjectId(id); await loadDetail(id); }
+  async function submitExpense() { if (!selectedProjectId) return; setError(null); try { const expense = editing ? await api.updateExpense(editing.id, formPayload(form, editing.updatedAt)) : await api.createExpense(selectedProjectId, formPayload(form)); if (form.files.length) await api.attach(expense.id, form.files.map((file) => ({ filename: file.filename, contentType: file.contentType, sizeBytes: Number(file.sizeBytes) }))); setForm(emptyExpenseForm); setEditing(null); await loadProjects(); await loadDetail(selectedProjectId); } catch (err) { setError(err instanceof Error ? err.message : "Submit failed"); } }
+  function editExpense(expense: Expense) { setEditing(expense); setForm({ vendor: expense.vendor, category: expense.category as ExpenseFormState["category"], entryDate: expense.entryDate, note: expense.note ?? "", tax: String(expense.tax), fee: String(expense.fee), items: expense.items.map((item) => ({ description: item.description, quantity: String(item.quantity), unitPrice: String(item.unitPrice) })), files: [] }); }
+  if (!session) return <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-4 p-6"><h1 className="text-3xl font-semibold text-brand">Forge</h1><input className="rounded border p-2" placeholder="email or username" value={email} onChange={(e) => setEmail(e.target.value)} /><input className="rounded border p-2" placeholder="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} /><Button onClick={doLogin}>Log in</Button>{error ? <p className="text-sm text-destructive">{error}</p> : null}</main>;
+  return <main className="min-h-screen bg-background p-6 text-foreground"><div className="mb-6 flex items-center justify-between"><div><h1 className="text-3xl font-semibold text-brand">Variance board</h1><p className="text-sm text-muted-foreground">{session.email} · {session.role}</p></div><Button variant="outline" onClick={toggleTheme}>Switch to {resolvedTheme === "dark" ? "light" : "dark"}</Button></div>{error ? <p className="mb-4 rounded border border-destructive p-3 text-destructive">{error}</p> : null}<section className="grid gap-3 md:grid-cols-2">{projects.map((project) => <button key={project.id} className={`rounded-lg border p-4 text-left ${project.variance_pct > 10 ? "border-destructive bg-destructive/10" : ""}`} onClick={() => void openProject(project.id)}><h2 className="font-semibold">{project.name}</h2><p>Estimate {money(project.estimate)}</p><p>Actual {money(project.actual_to_date)}</p><p>Variance {project.actual_to_date === 0 ? "no expenses yet" : pct(project.variance_pct)}</p></button>)}</section>{detail ? <section className="mt-8 rounded-lg border p-4"><h2 className="text-2xl font-semibold">{detail.project.name}</h2><p>{money(detail.project.actual_to_date)} actual vs {money(detail.project.estimate)} estimate ({pct(detail.project.variance_pct)})</p><div className="mt-4 space-y-2">{detail.expenses.map((expense) => <div key={expense.id} className="rounded border p-3"><div className="flex justify-between"><strong>{expense.vendor}</strong><span>{money(expense.totalAmount)}</span></div><p className="text-sm text-muted-foreground">{expense.category} · {expense.entryDate}</p>{expense.attachments?.length ? <p className="text-sm">Attachments: {expense.attachments.map((a) => a.filename).join(", ")}</p> : null}{canWriteExpense ? <Button className="mt-2" variant="outline" size="sm" onClick={() => editExpense(expense)}>Edit</Button> : null}</div>)}</div>{canWriteExpense ? <div className="mt-6 grid gap-2"><h3 className="font-semibold">{editing ? "Edit expense" : "Add expense"}</h3><input className="rounded border p-2" placeholder="Vendor" value={form.vendor} onChange={(e) => setForm({ ...form, vendor: e.target.value })} /><select className="rounded border p-2" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value as ExpenseFormState["category"] })}><option value="material">material</option><option value="labor">labor</option><option value="equipment">equipment</option><option value="other">other</option></select><input className="rounded border p-2" type="date" value={form.entryDate} onChange={(e) => setForm({ ...form, entryDate: e.target.value })} /><textarea className="rounded border p-2" placeholder="Note" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />{form.items.map((item, index) => <div className="grid gap-2 md:grid-cols-3" key={index}><input className="rounded border p-2" placeholder="Description" value={item.description} onChange={(e) => setForm({ ...form, items: form.items.map((it, i) => i === index ? { ...it, description: e.target.value } : it) })} /><input className="rounded border p-2" placeholder="Qty" value={item.quantity} onChange={(e) => setForm({ ...form, items: form.items.map((it, i) => i === index ? { ...it, quantity: e.target.value } : it) })} /><input className="rounded border p-2" placeholder="Unit price" value={item.unitPrice} onChange={(e) => setForm({ ...form, items: form.items.map((it, i) => i === index ? { ...it, unitPrice: e.target.value } : it) })} /></div>)}<Button variant="outline" onClick={() => setForm({ ...form, items: [...form.items, { description: "", quantity: "1", unitPrice: "0" }] })}>Add line</Button><input className="rounded border p-2" placeholder="Tax" value={form.tax} onChange={(e) => setForm({ ...form, tax: e.target.value })} /><input className="rounded border p-2" placeholder="Fee" value={form.fee} onChange={(e) => setForm({ ...form, fee: e.target.value })} /><p>Preview total: {money(previewTotal)}</p><Button onClick={submitExpense}>{editing ? "Save expense" : "Create expense"}</Button></div> : <p className="mt-4 text-sm text-muted-foreground">Workers can view project and expense information but cannot write.</p>}</section> : null}</main>;
 }

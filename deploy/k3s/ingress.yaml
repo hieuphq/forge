@@ -1,0 +1,37 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: forge-web
+  namespace: forge
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: forge.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: forge-web
+                port:
+                  number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: forge-api
+  namespace: forge
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: api.forge.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: forge-api
+                port:
+                  number: 3000

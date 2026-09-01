@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: forge-config
+  namespace: forge
+data:
+  POSTGRES_DB: forge
+  POSTGRES_USER: postgres
+  PORT: "3000"
+  CORS_ALLOWED_ORIGINS: https://forge.example.com
+  API_URL: https://api.forge.example.com

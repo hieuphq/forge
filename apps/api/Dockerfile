@@ -9,6 +9,7 @@ COPY scripts ./scripts
 
 RUN bun install --frozen-lockfile --ignore-scripts
 RUN bun run --filter @yourorg/api db:generate
+RUN bun install --frozen-lockfile --production --ignore-scripts
 
 FROM oven/bun:1.3-slim AS runtime
 

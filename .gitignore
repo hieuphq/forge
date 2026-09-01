@@ -16,3 +16,4 @@ build/
 !.env.example
 
 # bun.lock is intentionally tracked (deterministic installs); do not add it here.
+.pi/*
