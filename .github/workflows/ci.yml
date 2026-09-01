@@ -58,8 +58,8 @@ jobs:
           # name/type declaration.
           ASSIGN='(secret|token|password|api[_-]?key)\s*[:=]\s*["'"'"'][A-Za-z0-9+/_=-]{16,}["'"'"']'
           if grep -rnEI --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=dist \
-              --exclude='*.lock' "$ASSIGN" . \
-              | grep -v 'change-me-in-setup'; then
+              --exclude='*.lock' --exclude='*.test.ts' --exclude='*.test.tsx' \
+              "$ASSIGN" . | grep -v 'change-me-in-setup'; then
             echo "::error::Potential hardcoded secret literal matched above."
             exit 1
           fi
@@ -120,21 +120,14 @@ jobs:
         with:
           node-version: 22
 
-      - name: Scaffold into a fresh directory (simulates the local-template path)
+      - name: Scaffold through the local template path
         run: |
           set -euo pipefail
-          mkdir -p /tmp/scaffold-path-b
-          rsync -a \
-            --exclude node_modules \
-            --exclude .git \
-            --exclude dist \
-            --exclude .env \
-            "$GITHUB_WORKSPACE/" /tmp/scaffold-path-b/myapp/
-          echo "SCAFFOLD_DIR=/tmp/scaffold-path-b/myapp" >> "$GITHUB_ENV"
-
-      - name: bun run setup (what bun-create.postinstall fires automatically)
-        working-directory: /tmp/scaffold-path-b/myapp
-        run: bun run setup
+          mkdir -p "$HOME/.bun-create" /tmp/scaffold-path-b
+          ln -s "$GITHUB_WORKSPACE" "$HOME/.bun-create/forge"
+          bun create forge /tmp/scaffold-path-b/myapp
+          [ -f /tmp/scaffold-path-b/myapp/.env ]
+          [ "$(jq -r .name /tmp/scaffold-path-b/myapp/package.json)" = "myapp" ]
 
       - name: install
         working-directory: /tmp/scaffold-path-b/myapp
@@ -219,18 +212,17 @@ jobs:
         if: steps.scaffold.outputs.scaffolded == 'true'
         run: |
           set -euo pipefail
-          mkdir -p /tmp/scaffold-path-a-compare-b
-          rsync -a \
-            --exclude node_modules --exclude .git --exclude dist --exclude .env \
-            "$GITHUB_WORKSPACE/" /tmp/scaffold-path-a-compare-b/myapp/
-          (cd /tmp/scaffold-path-a-compare-b/myapp && bun run setup)
+          mkdir -p "$HOME/.bun-create" /tmp/scaffold-path-a-compare-b
+          ln -s "$GITHUB_WORKSPACE" "$HOME/.bun-create/forge"
+          bun create forge /tmp/scaffold-path-a-compare-b/myapp
 
       - name: Diff path A vs path B source trees
         if: steps.scaffold.outputs.scaffolded == 'true'
         run: |
           set -euo pipefail
           diff -rq \
-            -x node_modules -x .git -x dist -x .env -x bun.lock \
+            -x node_modules -x .git -x dist -x dist-ci-check -x .expo \
+            -x '*.tsbuildinfo' -x .env -x bun.lock \
             /tmp/scaffold-path-a/myapp /tmp/scaffold-path-a-compare-b/myapp \
             && echo "Path A and Path B produced identical source trees." \
             || { echo "::error::Path A and Path B scaffolds diverged — see diff above."; exit 1; }

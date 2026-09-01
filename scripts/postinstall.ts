@@ -27,6 +27,10 @@ if (apiPackageName === "@yourorg/api") {
     "apps/web/dist",
     "apps/mobile-lynx/dist",
     "apps/mobile/dist-ci-check",
+    "apps/mobile/.expo",
+    "apps/api/tsconfig.tsbuildinfo",
+    "packages/lib/tsconfig.tsbuildinfo",
+    "packages/shared/tsconfig.tsbuildinfo",
   ]) {
     rmSync(path.join(process.cwd(), output), { recursive: true, force: true });
   }
