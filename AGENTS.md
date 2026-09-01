@@ -11,8 +11,7 @@ and generates real local secrets). If any of that still looks unrun, run
 ## 2. Repo layout
 
 - `apps/api` — Hono HTTP API: security middleware, trace-id propagation, a
-  single `onError` boundary, argon2id + JWT auth, Prisma-backed users,
-  projects, expenses, attachment metadata, and SSE freshness events.
+  single `onError` boundary, argon2id + JWT auth, Prisma-backed users/roles and auth routes.
 - `apps/web` — Vite + React 19 + Tailwind v4 + shadcn/ui SPA with runtime
   `/config.js` API URL configuration.
 - `apps/mobile` — Expo app; resolves workspace packages via a custom Metro
@@ -80,10 +79,7 @@ auth rate limiting. Users are stored in Postgres through Prisma.
 ## 8. Known limitations / what to do next
 
 - No refresh token; re-auth after expiry is a full login.
-- `apps/api/src/modules/projects` is demo project/expense variance-board code,
-  meant to be replaced or adapted to the generated app's domain.
-- Attachment storage is local/dev metadata only until a production object store
-  is configured.
+- Add your real domain modules after replacing or extending the auth-only scaffold.
 - `apps/mobile-lynx` is experimental and unrelated to the Expo app; delete it if
   unused.
 - `docker-compose.yml` runs Postgres/API/web only — no Redis, no queue, no other

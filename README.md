@@ -12,7 +12,7 @@ ship (API, web), two mobile targets, and two shared libraries:
 
 Scaffold a new project from this template, then personalise it with
 `bun run setup` (rewrites the `@yourorg/*` package scope, project name, and
-generates real local secrets). The API includes a Prisma-backed project/expense variance-board demo;
+generates real local secrets). The API includes Prisma-backed auth/users;
 run `docker compose up -d postgres && bun run db:migrate && bun run db:seed` before using it.
 
 ## Getting started
@@ -57,10 +57,8 @@ a dispatch guard, not a second personalization implementation.
 
 ## Demo app
 
-New projects include a small vertical slice: persistent users/roles, project
-estimates, expenses with server-calculated totals, attachment metadata, and SSE
-freshness events. Treat it as a working example to replace or adapt to your
-actual domain.
+New projects include a small auth slice: persistent users/roles, login, session
+lookup, and owner-only user management. Add real domain modules after scaffold.
 
 Seed users are `owner@example.test`, `pm@example.test`, and
 `worker@example.test`; default seed password is `password123`.

@@ -315,7 +315,7 @@ bun run --filter '@${projectName}/web' dev
 
 ## Workspaces
 
-- \`apps/api\` — Hono API, Prisma/PostgreSQL example CRUD, and auth.
+- \`apps/api\` — Hono API, Prisma/PostgreSQL users, roles, and auth.
 - \`apps/web\` — Vite, React, Tailwind, and shadcn/ui SPA.
 - \`apps/mobile\` — Expo app; run with \`bun run --filter '@${projectName}/mobile' start\`.
 - \`apps/mobile-lynx\` — experimental ReactLynx target; safe to delete if unused.
@@ -370,8 +370,7 @@ bun run --workspaces --if-present build
 - Authentication uses persistent Prisma users with role-based access.
 - There is no refresh token; logout deletes the cookie but cannot revoke an
   already-issued JWT.
-- \`apps/api/src/modules/projects\` is a demo project/expense variance board intended
-  to be replaced or adapted to your domain code.
+- Add real domain modules after replacing or extending the auth-only scaffold.
 - \`apps/mobile-lynx\` is experimental and independent from the Expo app.
 - Docker Compose provisions PostgreSQL, API, and web for local container checks.
 - \`deploy/k3s/\` is a minimal Kubernetes scaffold; review images, hosts, storage,
@@ -379,7 +378,7 @@ bun run --workspaces --if-present build
 - \`_docs/RED-MONITORING.md\` is a proposal, not an implemented monitoring stack.
 
 Before production use, review the security notes in
-\`apps/api/src/modules/auth/README.md\`, configure production secrets, and replace demo domain code as needed.
+\`apps/api/src/modules/auth/README.md\`, configure production secrets, and add your domain code.
 
 ## Development guidance
 
