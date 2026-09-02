@@ -21,6 +21,7 @@ export const corsMiddleware = cors({
     return env.CORS_ALLOWED_ORIGINS.includes(origin) ? origin : undefined;
   },
   exposeHeaders: ["X-Trace-Id", "traceparent"],
+  credentials: true,
 });
 
 /**
